@@ -6,7 +6,9 @@
     "dev:server": "cd server && npm start",
     "dev:client": "cd client && npm run dev",
     "build:client": "cd client && npm run build",
-    "build": "cd client && npm install && npm run build && cd ../server && npm install",
+    "build": "cd client && npm install && chmod +x ./node_modules/.bin/* && npm run build && cd ../server && npm install",
     "start": "cd server && npm start"
+    
   }
+ 
 }
