@@ -1,11 +1,23 @@
-import React, { useState } from 'react';
-import { Users, Hash, PhoneCall, ShieldAlert, Play, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Hash, PhoneCall, ShieldAlert, Play, Sparkles, Smartphone, Type, Clock } from 'lucide-react';
 
-export default function GroupCreator({ isLinked, onStartCreation, disabled }) {
+export default function GroupCreator({ waStatus, isLinked, onStartCreation, disabled }) {
   const [baseName, setBaseName] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [targetNumber, setTargetNumber] = useState('');
   const [delaySeconds, setDelaySeconds] = useState(12);
+  const [senderNumber, setSenderNumber] = useState('');
+  const [creationType, setCreationType] = useState('group');
+  const [error, setError] = useState(null);
+
+  const statuses = Array.isArray(waStatus) ? waStatus : [];
+  const connectedDevices = statuses.filter(s => s.isConnected);
+
+  useEffect(() => {
+    if (connectedDevices.length > 0 && (!senderNumber || !connectedDevices.find(d => d.phoneNumber === senderNumber))) {
+      setSenderNumber(connectedDevices[0].phoneNumber);
+    }
+  }, [connectedDevices, senderNumber]);
 
   // Real-time phone number normalization helper
   const getNormalizedPreview = (raw) => {
@@ -23,8 +35,13 @@ export default function GroupCreator({ isLinked, onStartCreation, disabled }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError(null);
     if (!isLinked) {
-      alert('Please link your WhatsApp device first!');
+      setError('Please link your WhatsApp device first!');
+      return;
+    }
+    if (!senderNumber) {
+      setError('Please select a sender device.');
       return;
     }
 
@@ -32,7 +49,9 @@ export default function GroupCreator({ isLinked, onStartCreation, disabled }) {
       baseName: baseName.trim(),
       quantity: Math.max(1, Math.min(50, parseInt(quantity, 10) || 1)),
       targetNumber: targetNumber.trim(),
-      delaySeconds: Math.max(1, Math.min(60, parseInt(delaySeconds, 10) || 12))
+      delaySeconds: Math.max(1, parseInt(delaySeconds, 10) || 12),
+      senderNumber: senderNumber,
+      creationType: creationType
     });
   };
 
@@ -53,21 +72,87 @@ export default function GroupCreator({ isLinked, onStartCreation, disabled }) {
         </div>
         <div>
           <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff' }}>
-            Group Creation Agent
+            Creation Agent
           </h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            Configure group details and quantity for automated creation
+            Configure details for automated creation
           </p>
         </div>
       </div>
 
+      {error && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
+          color: '#fca5a5', padding: '0.75rem 1rem', borderRadius: 'var(--radius-sm)',
+          fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem'
+        }}>
+          <ShieldAlert size={16} /><span>{error}</span>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
-        {/* Group Base Name */}
+        {/* Sender Device Selection */}
+        <div className="form-group" style={{ marginBottom: '1rem' }}>
+          <label className="form-label">
+            <span>Sender Device</span>
+          </label>
+          <div style={{ position: 'relative' }}>
+            <select
+              className="input-field"
+              style={{ width: '100%', paddingLeft: '2.5rem', appearance: 'none', backgroundColor: 'rgba(0,0,0,0.2)' }}
+              value={senderNumber}
+              onChange={(e) => setSenderNumber(e.target.value)}
+              required
+              disabled={disabled || !isLinked}
+            >
+              <option value="" disabled>Select a connected device</option>
+              {connectedDevices.map(device => (
+                <option key={device.phoneNumber} value={device.phoneNumber}>
+                  +{device.phoneNumber}
+                </option>
+              ))}
+            </select>
+            <Smartphone size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+          </div>
+        </div>
+
+        {/* Creation Type Selection */}
+        <div className="form-group" style={{ marginBottom: '1rem' }}>
+          <label className="form-label">
+            <span>Creation Type</span>
+          </label>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="creationType"
+                value="group"
+                checked={creationType === 'group'}
+                onChange={() => setCreationType('group')}
+                disabled={disabled || !isLinked}
+              />
+              <span>WhatsApp Group</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="creationType"
+                value="community"
+                checked={creationType === 'community'}
+                onChange={() => setCreationType('community')}
+                disabled={disabled || !isLinked}
+              />
+              <span>WhatsApp Community</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Base Name */}
         <div className="form-group">
           <label className="form-label">
-            <span>Group Name / Base Subject</span>
+            <span>{creationType === 'group' ? 'Group' : 'Community'} Name / Base Subject</span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {quantity > 1 ? `Will be: "${baseName || 'Group'} #1", "#2"...` : ''}
+              {quantity > 1 ? `Will be: "${baseName || (creationType === 'group' ? 'Group' : 'Community')} #1", "#2"...` : ''}
             </span>
           </label>
           <div style={{ position: 'relative' }}>
@@ -76,13 +161,13 @@ export default function GroupCreator({ isLinked, onStartCreation, disabled }) {
               maxLength={75}
               className="input-field"
               style={{ width: '100%', paddingLeft: '2.5rem' }}
-              placeholder="e.g. VIP Club 2026"
+              placeholder={creationType === 'group' ? "e.g. VIP Club 2026" : "e.g. Tech Community"}
               value={baseName}
               onChange={(e) => setBaseName(e.target.value)}
               required
               disabled={disabled || !isLinked}
             />
-            <Users size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+            <Type size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           </div>
         </div>
 
@@ -146,27 +231,25 @@ export default function GroupCreator({ isLinked, onStartCreation, disabled }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
               <ShieldAlert size={16} color="var(--warning)" />
-              Anti-Detection Interval Delay:
-            </span>
-            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--wa-green)' }}>
-              {delaySeconds} seconds
+              Anti-Detection Interval Delay (Seconds):
             </span>
           </div>
 
-          <input
-            type="range"
-            min="1"
-            max="35"
-            step="1"
-            value={delaySeconds}
-            onChange={(e) => setDelaySeconds(e.target.value)}
-            style={{ width: '100%', accentColor: 'var(--wa-green)', cursor: 'pointer' }}
-            disabled={disabled || !isLinked}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-            <span>1s (Risk of Ban)</span>
-            <span>12-15s (Recommended Safe)</span>
-            <span>35s (Ultra Safe)</span>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="number"
+              min="1"
+              className="input-field"
+              style={{ width: '100%', paddingLeft: '2.5rem', accentColor: 'var(--wa-green)' }}
+              value={delaySeconds}
+              onChange={(e) => setDelaySeconds(e.target.value)}
+              required
+              disabled={disabled || !isLinked}
+            />
+            <Clock size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            <span>Recommended minimum: 12 seconds for safety.</span>
           </div>
         </div>
 
@@ -175,15 +258,15 @@ export default function GroupCreator({ isLinked, onStartCreation, disabled }) {
           type="submit"
           className="btn btn-primary"
           style={{ width: '100%', padding: '0.95rem' }}
-          disabled={disabled || !isLinked}
+          disabled={disabled || !isLinked || !senderNumber}
         >
           <Play size={18} fill="#032512" />
-          <span>Launch Group Creation Agent</span>
+          <span>Launch Creation Agent</span>
         </button>
 
         {!isLinked && (
           <div style={{ textAlign: 'center', fontSize: '0.78rem', color: '#fbbf24', marginTop: '0.75rem' }}>
-            Please link your WhatsApp companion phone number first.
+            Please link at least one WhatsApp companion phone number first.
           </div>
         )}
       </form>

@@ -71,7 +71,7 @@ export default function App() {
         if (isMounted) {
           setWaStatus(status);
           // If already linked and on default tab, switch to group creator
-          if (status.isConnected && activeTab === 'link') {
+          if (Array.isArray(status) && status.some(s => s.isConnected) && activeTab === 'link') {
             setActiveTab('create');
           }
         }
@@ -237,12 +237,11 @@ export default function App() {
         {/* TAB 1: WHATSAPP LINK */}
         {activeTab === 'link' && (
           <DeviceLink
-            waStatus={waStatus}
+            waStatus={waStatus || []}
             onStatusChange={(newStatus) => {
               setWaStatus(newStatus);
-              if (newStatus.isConnected) {
+              if (Array.isArray(newStatus) && newStatus.some(s => s.isConnected)) {
                 handleRefreshGroups();
-                setActiveTab('create');
               }
             }}
           />
@@ -261,9 +260,10 @@ export default function App() {
 
             {(!currentJob || currentJob.isComplete) && (
               <GroupCreator
-                isLinked={waStatus?.isConnected || false}
+                waStatus={waStatus || []}
+                isLinked={Array.isArray(waStatus) && waStatus.some(s => s.isConnected)}
                 onStartCreation={handleStartCreation}
-                disabled={!waStatus?.isConnected}
+                disabled={!Array.isArray(waStatus) || !waStatus.some(s => s.isConnected)}
               />
             )}
           </>

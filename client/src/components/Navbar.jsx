@@ -81,9 +81,9 @@ export default function Navbar({ user, waStatus, onOpenSidebar, activeTab }) {
             borderRadius: 'var(--radius-full)',
             border: '1px solid var(--border-color)'
           }}>
-            <span className={`pulse-dot ${waStatus?.isConnected ? 'green' : 'amber'}`}></span>
-            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: waStatus?.isConnected ? '#34d399' : '#fbbf24' }}>
-              {waStatus?.isConnected ? 'Linked' : 'Offline'}
+            <span className={`pulse-dot ${Array.isArray(waStatus) && waStatus.some(s => s.isConnected) ? 'green' : 'amber'}`}></span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: Array.isArray(waStatus) && waStatus.some(s => s.isConnected) ? '#34d399' : '#fbbf24' }}>
+              {Array.isArray(waStatus) && waStatus.some(s => s.isConnected) ? 'Linked' : 'Offline'}
             </span>
           </div>
         </div>

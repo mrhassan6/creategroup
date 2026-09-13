@@ -1,135 +1,143 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-const DB_TMP_FILE = path.join(DATA_DIR, 'db.json.tmp');
+const JSON_DB_FILE = path.join(DATA_DIR, 'db.json');
+const SQLITE_FILE = path.join(DATA_DIR, 'database.sqlite');
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-let inMemoryDb = {
-  users: [],
-  groups: []
-};
+let dbConn = null;
+let isInitialized = false;
 
-function readDb() {
-  try {
-    if (!fs.existsSync(DB_FILE)) {
-      // Seed default admin account on first run
-      const salt = bcrypt.genSaltSync(10);
-      const defaultHash = bcrypt.hashSync('hassan123', salt);
-      const initial = {
-        users: [
-          {
-            id: 'admin_' + Date.now(),
-            username: 'hassan',
-            passwordHash: defaultHash,
-            role: 'admin',
-            isActive: true,
-            currentSessionId: null,
-            lastLoginAt: null,
-            createdAt: new Date().toISOString()
+// Initialize DB once at startup
+export async function initDb() {
+  dbConn = new Database(SQLITE_FILE);
+  dbConn.pragma('journal_mode = WAL'); // Enables high concurrency without blocking
+
+  // Create tables
+  dbConn.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      passwordHash TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      isActive INTEGER DEFAULT 1,
+      currentSessionId TEXT,
+      expiresAt TEXT,
+      notes TEXT,
+      name TEXT,
+      phoneNumber TEXT,
+      lastLoginAt TEXT,
+      createdAt TEXT NOT NULL
+    );
+  `);
+
+  dbConn.exec(`
+    CREATE TABLE IF NOT EXISTS groups (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      groupName TEXT,
+      groupId TEXT,
+      inviteLink TEXT,
+      targetNumber TEXT,
+      status TEXT,
+      error TEXT,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+
+  // Migrate old JSON data if it exists and we haven't migrated
+  if (fs.existsSync(JSON_DB_FILE)) {
+    try {
+      const raw = await fs.promises.readFile(JSON_DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      
+      const insertUser = dbConn.prepare(`
+        INSERT OR IGNORE INTO users (id, username, passwordHash, role, isActive, currentSessionId, expiresAt, notes, name, phoneNumber, lastLoginAt, createdAt)
+        VALUES (@id, @username, @passwordHash, @role, @isActive, @currentSessionId, @expiresAt, @notes, @name, @phoneNumber, @lastLoginAt, @createdAt)
+      `);
+      
+      const insertGroup = dbConn.prepare(`
+        INSERT OR IGNORE INTO groups (id, userId, groupName, groupId, inviteLink, targetNumber, status, error, createdAt)
+        VALUES (@id, @userId, @groupName, @groupId, @inviteLink, @targetNumber, @status, @error, @createdAt)
+      `);
+
+      dbConn.transaction(() => {
+        if (parsed.users) {
+          for (const u of parsed.users) {
+            insertUser.run({
+              id: u.id,
+              username: u.username || `user_${Date.now()}`,
+              passwordHash: u.passwordHash || '',
+              role: u.role || 'user',
+              isActive: u.isActive === false ? 0 : 1,
+              currentSessionId: u.currentSessionId || null,
+              expiresAt: u.expiresAt || null,
+              notes: u.notes || '',
+              name: u.name || '',
+              phoneNumber: u.phoneNumber || '',
+              lastLoginAt: u.lastLoginAt || null,
+              createdAt: u.createdAt || new Date().toISOString()
+            });
           }
-        ],
-        groups: []
-      };
-      writeDb(initial);
-      inMemoryDb = initial;
-      return initial;
+        }
+        if (parsed.groups) {
+          for (const g of parsed.groups) {
+             insertGroup.run({
+                id: g.id || `${Date.now()}_${Math.random()}`,
+                userId: g.userId,
+                groupName: g.groupName || '',
+                groupId: g.groupId || null,
+                inviteLink: g.inviteLink || null,
+                targetNumber: g.targetNumber || '',
+                status: g.status || '',
+                error: g.error || null,
+                createdAt: g.createdAt || new Date().toISOString()
+             });
+          }
+        }
+      })();
+      
+      // Rename JSON to prevent re-migration
+      await fs.promises.rename(JSON_DB_FILE, JSON_DB_FILE + '.migrated');
+      console.log('[DB] Safely migrated db.json to SQLite database.sqlite');
+    } catch(err) {
+      console.error('[DB] Error migrating JSON DB to SQLite:', err);
     }
-
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-
-    // Schema integrity & auto-promotion
-    let changed = false;
-    if (!Array.isArray(parsed.users)) parsed.users = [];
-    if (!Array.isArray(parsed.groups)) parsed.groups = [];
-
-    parsed.users = parsed.users.map((u) => {
-      let updated = false;
-      if (!u.role) {
-        u.role = (u.username?.toLowerCase() === 'hassan' || u.username?.toLowerCase() === 'admin') ? 'admin' : 'user';
-        updated = true;
-      }
-      if (u.isActive === undefined) {
-        u.isActive = true;
-        updated = true;
-      }
-      if (u.currentSessionId === undefined) {
-        u.currentSessionId = null;
-        updated = true;
-      }
-      if (u.expiresAt === undefined) {
-        u.expiresAt = null; // null = lifetime
-        updated = true;
-      }
-      if (u.notes === undefined) {
-        u.notes = '';
-        updated = true;
-      }
-      if (u.name === undefined) {
-        u.name = '';
-        updated = true;
-      }
-      if (u.phoneNumber === undefined) {
-        u.phoneNumber = '';
-        updated = true;
-      }
-      if (updated) changed = true;
-      return u;
-    });
-
-    // Ensure at least one admin account exists
-    const hasAdmin = parsed.users.some((u) => u.role === 'admin');
-    if (!hasAdmin) {
-      const salt = bcrypt.genSaltSync(10);
-      parsed.users.push({
-        id: 'admin_' + Date.now(),
-        username: 'hassan',
-        passwordHash: bcrypt.hashSync('hassan123', salt),
-        role: 'admin',
-        isActive: true,
-        currentSessionId: null,
-        lastLoginAt: null,
-        createdAt: new Date().toISOString()
-      });
-      changed = true;
-    }
-
-    inMemoryDb = parsed;
-    if (changed) writeDb(parsed);
-    return parsed;
-  } catch (err) {
-    console.error('[DB] Warning: Error reading DB file, using in-memory cache to prevent data loss:', err.message);
-    return inMemoryDb;
   }
+
+  // Ensure at least one admin account exists
+  const adminCount = dbConn.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'").get().count;
+  if (adminCount === 0) {
+    const salt = await bcrypt.genSalt(10);
+    const defaultHash = await bcrypt.hash('hassan123', salt);
+    const insertAdmin = dbConn.prepare(`
+        INSERT INTO users (id, username, passwordHash, role, isActive, createdAt)
+        VALUES (@id, @username, @passwordHash, 'admin', 1, @createdAt)
+    `);
+    insertAdmin.run({
+      id: 'admin_' + Date.now(),
+      username: 'hassan',
+      passwordHash: defaultHash,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  isInitialized = true;
 }
 
-// Atomic file write to prevent corruption during unexpected shutdowns
-function writeDb(data) {
-  try {
-    inMemoryDb = data;
-    const jsonString = JSON.stringify(data, null, 2);
-    fs.writeFileSync(DB_TMP_FILE, jsonString, 'utf-8');
-    try {
-      fs.renameSync(DB_TMP_FILE, DB_FILE);
-    } catch (renameErr) {
-      if (renameErr.code === 'EXDEV') {
-        fs.copyFileSync(DB_TMP_FILE, DB_FILE);
-        fs.unlinkSync(DB_TMP_FILE);
-      } else {
-        throw renameErr;
-      }
-    }
-  } catch (err) {
-    console.error('[DB] Error writing database atomically:', err);
+function ensureInit() {
+  if (!isInitialized || !dbConn) {
+    console.warn('[DB] DB access attempted before init. This should not happen if startServer awaits initDb.');
   }
 }
 
@@ -141,182 +149,159 @@ export function isUserExpired(user) {
 export function getDaysRemaining(expiresAt) {
   if (!expiresAt) return null;
   const ms = new Date(expiresAt).getTime() - Date.now();
-  const days = Math.ceil(ms / (1000 * 60 * 60 * 24));
-  return days;
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+function mapUserRow(u) {
+  if (!u) return null;
+  return {
+    ...u,
+    isActive: u.isActive === 1,
+    isExpired: isUserExpired(u),
+    daysRemaining: getDaysRemaining(u.expiresAt),
+    hasActiveSession: !!u.currentSessionId
+  };
 }
 
 export const db = {
   findUserByUsername(username) {
     if (!username) return null;
-    const data = readDb();
-    return data.users.find((u) => u.username && u.username.toLowerCase() === username.toLowerCase().trim());
+    ensureInit();
+    const row = dbConn.prepare("SELECT * FROM users WHERE LOWER(username) = ?").get(username.toLowerCase().trim());
+    return mapUserRow(row);
   },
 
   findUserById(id) {
     if (!id) return null;
-    const data = readDb();
-    return data.users.find((u) => u.id === id);
+    ensureInit();
+    const row = dbConn.prepare("SELECT * FROM users WHERE id = ?").get(id);
+    return mapUserRow(row);
   },
 
   getAllUsers() {
-    const data = readDb();
-    return data.users.map((u) => ({
-      id: u.id,
-      name: u.name || '',
-      phoneNumber: u.phoneNumber || '',
-      username: u.username,
-      role: u.role || 'user',
-      isActive: u.isActive !== false,
-      expiresAt: u.expiresAt || null,
-      isExpired: isUserExpired(u),
-      daysRemaining: getDaysRemaining(u.expiresAt),
-      notes: u.notes || '',
-      hasActiveSession: !!u.currentSessionId,
-      lastLoginAt: u.lastLoginAt || null,
-      createdAt: u.createdAt
-    }));
+    ensureInit();
+    const rows = dbConn.prepare("SELECT * FROM users").all();
+    return rows.map(mapUserRow);
   },
 
   createUser({ id, name, phoneNumber, username, passwordHash, role = 'user', expiresAt = null, notes = '' }) {
-    const data = readDb();
+    ensureInit();
     const cleanUsername = username.trim();
-    const newUser = {
-      id: id || Date.now().toString() + '_' + Math.random().toString(36).substring(2, 6),
+    const newId = id || Date.now().toString() + '_' + Math.random().toString(36).substring(2, 6);
+    const actualRole = role || (cleanUsername.toLowerCase() === 'hassan' || cleanUsername.toLowerCase() === 'admin' ? 'admin' : 'user');
+    const actualExpires = cleanUsername.toLowerCase() === 'hassan' ? null : (expiresAt || null);
+    const createdAt = new Date().toISOString();
+
+    const insert = dbConn.prepare(`
+      INSERT INTO users (id, name, phoneNumber, username, passwordHash, role, isActive, expiresAt, notes, createdAt)
+      VALUES (@id, @name, @phoneNumber, @username, @passwordHash, @role, 1, @expiresAt, @notes, @createdAt)
+    `);
+    
+    insert.run({
+      id: newId,
       name: name ? String(name).trim() : '',
       phoneNumber: phoneNumber ? String(phoneNumber).trim() : '',
       username: cleanUsername,
       passwordHash,
-      role: role || (cleanUsername.toLowerCase() === 'hassan' || cleanUsername.toLowerCase() === 'admin' ? 'admin' : 'user'),
-      isActive: true,
-      expiresAt: cleanUsername.toLowerCase() === 'hassan' ? null : (expiresAt || null),
+      role: actualRole,
+      expiresAt: actualExpires,
       notes: notes || '',
-      currentSessionId: null,
-      lastLoginAt: null,
-      createdAt: new Date().toISOString()
-    };
-    data.users.push(newUser);
-    writeDb(data);
-    return {
-      id: newUser.id,
-      name: newUser.name,
-      phoneNumber: newUser.phoneNumber,
-      username: newUser.username,
-      role: newUser.role,
-      isActive: newUser.isActive,
-      expiresAt: newUser.expiresAt,
-      notes: newUser.notes,
-      createdAt: newUser.createdAt
-    };
+      createdAt
+    });
+    
+    return this.findUserById(newId);
   },
 
   updateUserDetails(userId, updates = {}) {
-    const data = readDb();
-    const user = data.users.find((u) => u.id === userId);
+    ensureInit();
+    const user = this.findUserById(userId);
     if (!user) return null;
 
+    const fields = [];
+    const values = {};
+    
     if (updates.username && updates.username.trim()) {
-      user.username = updates.username.trim();
+      fields.push("username = @username");
+      values.username = updates.username.trim();
     }
     if (updates.name !== undefined) {
-      user.name = updates.name !== null ? String(updates.name).trim() : '';
+      fields.push("name = @name");
+      values.name = updates.name !== null ? String(updates.name).trim() : '';
     }
     if (updates.phoneNumber !== undefined) {
-      user.phoneNumber = updates.phoneNumber !== null ? String(updates.phoneNumber).trim() : '';
+      fields.push("phoneNumber = @phoneNumber");
+      values.phoneNumber = updates.phoneNumber !== null ? String(updates.phoneNumber).trim() : '';
     }
     if (updates.role && (updates.role === 'admin' || updates.role === 'user')) {
-      user.role = updates.role;
+      fields.push("role = @role");
+      values.role = updates.role;
     }
     if (updates.isActive !== undefined) {
-      user.isActive = !!updates.isActive;
-      if (!user.isActive) {
-        user.currentSessionId = null; // Invalidate session on suspend/block
+      fields.push("isActive = @isActive");
+      values.isActive = !!updates.isActive ? 1 : 0;
+      if (!updates.isActive) {
+        fields.push("currentSessionId = NULL");
       }
     }
     if (updates.expiresAt !== undefined) {
-      user.expiresAt = updates.expiresAt;
+      fields.push("expiresAt = @expiresAt");
+      values.expiresAt = updates.expiresAt;
     }
     if (updates.notes !== undefined) {
-      user.notes = updates.notes;
+      fields.push("notes = @notes");
+      values.notes = updates.notes;
     }
 
-    writeDb(data);
-    return {
-      id: user.id,
-      name: user.name,
-      phoneNumber: user.phoneNumber,
-      username: user.username,
-      role: user.role,
-      isActive: user.isActive,
-      expiresAt: user.expiresAt,
-      isExpired: isUserExpired(user),
-      daysRemaining: getDaysRemaining(user.expiresAt),
-      notes: user.notes
-    };
+    if (fields.length > 0) {
+      values.id = userId;
+      dbConn.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = @id`).run(values);
+    }
+    return this.findUserById(userId);
   },
 
   updateUserPassword(userId, newPasswordHash) {
-    const data = readDb();
-    const user = data.users.find((u) => u.id === userId);
-    if (user) {
-      user.passwordHash = newPasswordHash;
-      user.currentSessionId = null; // Invalidate active session to force re-login with new password
-      writeDb(data);
-      return true;
-    }
-    return false;
+    ensureInit();
+    const result = dbConn.prepare("UPDATE users SET passwordHash = ?, currentSessionId = NULL WHERE id = ?").run(newPasswordHash, userId);
+    return result.changes > 0;
   },
 
   updateUserSession(userId, sessionId) {
-    const data = readDb();
-    const user = data.users.find((u) => u.id === userId);
-    if (user) {
-      user.currentSessionId = sessionId;
-      user.lastLoginAt = new Date().toISOString();
-      writeDb(data);
-      return true;
-    }
-    return false;
+    ensureInit();
+    const result = dbConn.prepare("UPDATE users SET currentSessionId = ?, lastLoginAt = ? WHERE id = ?").run(sessionId, new Date().toISOString(), userId);
+    return result.changes > 0;
   },
 
   clearUserSession(userId) {
-    const data = readDb();
-    const user = data.users.find((u) => u.id === userId);
-    if (user) {
-      user.currentSessionId = null;
-      writeDb(data);
-      return true;
-    }
-    return false;
+    ensureInit();
+    const result = dbConn.prepare("UPDATE users SET currentSessionId = NULL WHERE id = ?").run(userId);
+    return result.changes > 0;
   },
 
   toggleUserActive(userId) {
-    const data = readDb();
-    const user = data.users.find((u) => u.id === userId);
-    if (user) {
-      user.isActive = !user.isActive;
-      if (!user.isActive) {
-        user.currentSessionId = null;
-      }
-      writeDb(data);
-      return { id: user.id, username: user.username, isActive: user.isActive };
-    }
-    return null;
+    ensureInit();
+    const user = this.findUserById(userId);
+    if (!user) return null;
+    
+    const newActive = user.isActive ? 0 : 1;
+    const stmt = newActive === 0 
+      ? dbConn.prepare("UPDATE users SET isActive = 0, currentSessionId = NULL WHERE id = ?")
+      : dbConn.prepare("UPDATE users SET isActive = 1 WHERE id = ?");
+    
+    stmt.run(userId);
+    return this.findUserById(userId);
   },
 
   deleteUser(userId) {
-    const data = readDb();
-    const index = data.users.findIndex((u) => u.id === userId);
-    if (index !== -1) {
-      const removed = data.users.splice(index, 1)[0];
-      data.groups = data.groups.filter((g) => g.userId !== userId);
-      writeDb(data);
-      return removed;
-    }
-    return null;
+    ensureInit();
+    const user = this.findUserById(userId);
+    if (!user) return null;
+    
+    dbConn.prepare("DELETE FROM users WHERE id = ?").run(userId);
+    return user;
   },
 
   saveGroupRecord({ userId, groupName, groupId, inviteLink, targetNumber, status, error }) {
-    const data = readDb();
+    ensureInit();
     const record = {
       id: Date.now().toString() + '-' + Math.random().toString(36).substring(2, 7),
       userId,
@@ -328,50 +313,47 @@ export const db = {
       error: error || null,
       createdAt: new Date().toISOString()
     };
-    data.groups.push(record);
-    writeDb(data);
+    
+    dbConn.prepare(`
+      INSERT INTO groups (id, userId, groupName, groupId, inviteLink, targetNumber, status, error, createdAt)
+      VALUES (@id, @userId, @groupName, @groupId, @inviteLink, @targetNumber, @status, @error, @createdAt)
+    `).run(record);
+    
     return record;
   },
 
   getUserGroups(userId) {
-    const data = readDb();
-    return data.groups
-      .filter((g) => g.userId === userId)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    ensureInit();
+    return dbConn.prepare("SELECT * FROM groups WHERE userId = ? ORDER BY createdAt DESC").all(userId);
   },
 
   getAllGroupsWithUsers() {
-    const data = readDb();
-    const userMap = new Map(data.users.map((u) => [u.id, u.username]));
-    return data.groups
-      .map((g) => ({
-        ...g,
-        creatorUsername: userMap.get(g.userId) || 'Unknown'
-      }))
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    ensureInit();
+    return dbConn.prepare(`
+      SELECT g.*, COALESCE(u.username, 'Unknown') as creatorUsername 
+      FROM groups g 
+      LEFT JOIN users u ON g.userId = u.id 
+      ORDER BY g.createdAt DESC
+    `).all();
   },
 
   getTotalGroupsCount() {
-    const data = readDb();
-    return data.groups.length;
+    ensureInit();
+    return dbConn.prepare("SELECT COUNT(*) as count FROM groups").get().count;
   },
 
   pruneExpiredUsers() {
-    const data = readDb();
-    const now = new Date();
-    // Find all expired users that are not admin
-    const expiredUsers = data.users.filter(u => u.expiresAt && new Date(u.expiresAt) < now && u.role !== 'admin');
+    ensureInit();
+    const now = new Date().toISOString();
+    const expiredUsers = dbConn.prepare("SELECT id FROM users WHERE expiresAt IS NOT NULL AND expiresAt < ? AND role != 'admin'").all(now);
     
-    if (expiredUsers.length > 0) {
-      const expiredIds = expiredUsers.map(u => u.id);
-      
-      // Permanently remove users and their group history
-      data.users = data.users.filter(u => !expiredIds.includes(u.id));
-      data.groups = data.groups.filter(g => !expiredIds.includes(g.userId));
-      
-      writeDb(data);
-      return expiredIds;
+    const ids = expiredUsers.map(u => u.id);
+    if (ids.length > 0) {
+      dbConn.transaction(() => {
+         const delUsers = dbConn.prepare("DELETE FROM users WHERE id = ?");
+         for (const id of ids) delUsers.run(id);
+      })();
     }
-    return [];
+    return ids;
   }
 };

@@ -28,8 +28,8 @@ export default function Sidebar({
       id: 'link',
       label: 'WhatsApp Link',
       icon: Smartphone,
-      badge: waStatus?.isConnected ? 'Online' : 'Not Linked',
-      badgeClass: waStatus?.isConnected ? 'connected' : 'unlinked'
+      badge: Array.isArray(waStatus) && waStatus.some(s => s.isConnected) ? 'Online' : 'Not Linked',
+      badgeClass: Array.isArray(waStatus) && waStatus.some(s => s.isConnected) ? 'connected' : 'unlinked'
     },
     {
       id: 'create',

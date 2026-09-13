@@ -71,9 +71,10 @@ export const api = {
     });
   },
 
-  async unlinkDevice() {
+  async unlinkDevice(phoneNumber) {
     return request('/whatsapp/logout', {
-      method: 'POST'
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber })
     });
   },
 
@@ -81,9 +82,10 @@ export const api = {
     return request('/whatsapp/groups');
   },
 
-  async stopGroupCreation() {
+  async stopGroupCreation(senderNumber) {
     return request('/whatsapp/stop-create', {
-      method: 'POST'
+      method: 'POST',
+      body: JSON.stringify({ senderNumber })
     });
   },
 
@@ -131,14 +133,16 @@ export const api = {
     });
   },
 
-  streamGroupCreation({ baseName, quantity, targetNumber, delaySeconds, onProgress, onComplete, onError }) {
+  streamGroupCreation({ baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType, onProgress, onComplete, onError }) {
     const token = getStoredToken();
     const params = new URLSearchParams({
       token,
       baseName,
       quantity,
       targetNumber,
-      delaySeconds
+      delaySeconds,
+      senderNumber,
+      creationType
     });
 
     const eventSource = new EventSource(`${API_BASE}/whatsapp/stream-create?${params.toString()}`);

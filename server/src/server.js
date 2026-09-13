@@ -16,7 +16,7 @@ import {
   handleAdminDeleteUser
 } from './auth.js';
 import { whatsappManager } from './whatsappManager.js';
-import { db } from './db.js';
+import { db, initDb } from './db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -112,7 +112,8 @@ app.post('/api/whatsapp/pair-code', authMiddleware, async (req, res) => {
 // Unlink / Logout WhatsApp Companion Device
 app.post('/api/whatsapp/logout', authMiddleware, async (req, res) => {
   try {
-    await whatsappManager.logout(req.user.id);
+    const { phoneNumber } = req.body;
+    await whatsappManager.logout(req.user.id, phoneNumber);
     res.json({ success: true, message: 'Device unlinked successfully' });
   } catch (err) {
     console.error('Logout error:', err);
@@ -123,9 +124,9 @@ app.post('/api/whatsapp/logout', authMiddleware, async (req, res) => {
 // Stop Group Creation Batch
 app.post('/api/whatsapp/stop-create', authMiddleware, (req, res) => {
   try {
-    const status = whatsappManager.getStatus(req.user.id);
-    if (status.currentJob && status.currentJob.status === 'in_progress') {
-      status.currentJob.status = 'cancelled';
+    const { senderNumber } = req.body;
+    const stopped = whatsappManager.cancelJob(req.user.id, senderNumber);
+    if (stopped) {
       res.json({ success: true, message: 'Stop signal sent.' });
     } else {
       res.json({ success: false, message: 'No active job to stop.' });
@@ -169,6 +170,7 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
   let clientClosed = false;
   req.on('close', () => {
     clientClosed = true;
+    console.log('[SSE] Client disconnected, marking job as cancelled if running.');
   });
 
   const token = req.query.token;
@@ -197,9 +199,9 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
     return res.end();
   }
 
-  const { baseName, quantity, targetNumber, delaySeconds } = req.query;
-  if (!baseName || !targetNumber) {
-    sendEvent('error', { error: 'VALIDATION_ERROR', message: 'baseName and targetNumber are required' });
+  const { baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType } = req.query;
+  if (!baseName || !targetNumber || !senderNumber) {
+    sendEvent('error', { error: 'VALIDATION_ERROR', message: 'baseName, targetNumber, and senderNumber are required' });
     return res.end();
   }
   if (typeof targetNumber !== 'string' || targetNumber.length > 30) {
@@ -220,12 +222,15 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
       quantity,
       targetNumber,
       delaySeconds: parseInt(delaySeconds, 10) || 12,
+      senderNumber,
+      creationType,
       expectedSessionId: sessionId,
       onProgress: (progressData) => {
         if (!clientClosed) {
           sendEvent('progress', progressData);
         }
-      }
+      },
+      checkClientClosed: () => clientClosed
     });
 
     sendEvent('complete', {
@@ -258,17 +263,25 @@ app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({ error: 'Invalid JSON payload format' });
   }
-  next();
+  console.error('[Global Error]', err);
+  res.status(500).json({ error: 'Internal server error occurred.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`=========================================`);
-  console.log(`🚀 GC Agent Backend running on port ${PORT}`);
-  console.log(`🛡️ Admin Panel & Single-Device Guard Active`);
-  console.log(`=========================================`);
+async function startServer() {
+  try {
+    await initDb();
+    console.log('[DB] Database initialized successfully.');
 
-  // Auto-restore companion WhatsApp sessions on startup
-  whatsappManager.restoreAllSessions().catch((err) => {
-    console.error('[WhatsApp] Startup session restore error:', err.message);
-  });
-});
+    app.listen(PORT, () => {
+      console.log(`=========================================`);
+      console.log(`🚀 GC Agent Backend running on port ${PORT}`);
+      console.log(`🛡️ Admin Panel & Single-Device Guard Active`);
+      console.log(`=========================================`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+startServer();
