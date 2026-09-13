@@ -1,0 +1,9 @@
+{
+  "appId": "com.gcagent.whatsapp",
+  "appName": "GC Agent",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "gc-agent-root",
+  "version": "1.0.0",
+  "description": "WhatsApp Group Agent with APK & Pairing Code Manager",
+  "scripts": {
+    "dev:server": "cd server && npm start",
+    "dev:client": "cd client && npm run dev",
+    "build:client": "cd client && npm run build"
+  }
+}

@@ -1,0 +1,268 @@
+{
+  "users": [
+    {
+      "id": "1789193956060",
+      "username": "hassan",
+      "passwordHash": "$2a$10$i/WxtyfFVRj/.bIktszA4.O6Y.X4NL8kExexqzJO.Kuw4c2N.RZOu",
+      "createdAt": "2026-09-12T06:19:16.060Z",
+      "role": "admin",
+      "isActive": true,
+      "currentSessionId": "6aae5bf0a4cca7c52947f771ac98ca97",
+      "lastLoginAt": "2026-09-12T16:27:47.190Z",
+      "expiresAt": null,
+      "notes": "",
+      "name": "",
+      "phoneNumber": ""
+    },
+    {
+      "id": "1789194950598",
+      "username": "worker1",
+      "passwordHash": "$2a$10$6fQABXQqBbM.SF6v0PyRs.UCGL4EG8F0VQh0lhs.ak0OO3PQlgrp6",
+      "role": "user",
+      "isActive": true,
+      "currentSessionId": "session_device_2_1789194950606",
+      "lastLoginAt": "2026-09-12T06:35:50.607Z",
+      "createdAt": "2026-09-12T06:35:50.598Z",
+      "expiresAt": null,
+      "notes": "",
+      "name": "",
+      "phoneNumber": ""
+    },
+    {
+      "id": "1789231477451_r9ox",
+      "name": "fghj",
+      "phoneNumber": "5435454",
+      "username": "ss2",
+      "passwordHash": "$2a$10$eI1mLbZGp6MGYIs.vxhqsOCA48nTQOxZ7Y0KLo8v9Di1XPiHzQ3Fe",
+      "role": "user",
+      "isActive": true,
+      "expiresAt": "2026-09-13T16:44:37.284Z",
+      "notes": "",
+      "currentSessionId": null,
+      "lastLoginAt": "2026-09-12T17:17:50.585Z",
+      "createdAt": "2026-09-12T16:44:37.451Z"
+    }
+  ],
+  "groups": [
+    {
+      "id": "1789194419875-o27le",
+      "userId": "1789193956060",
+      "groupName": "26 #1",
+      "groupId": "120363412403534145@g.us",
+      "inviteLink": "https://chat.whatsapp.com/ISjmPbGdP1uIPGdSq68TQ2",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:26:59.875Z"
+    },
+    {
+      "id": "1789194429526-teswb",
+      "userId": "1789193956060",
+      "groupName": "26 #2",
+      "groupId": "120363411687212306@g.us",
+      "inviteLink": "https://chat.whatsapp.com/HcrVuazVP1BHp8zPQNCm0V",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:27:09.526Z"
+    },
+    {
+      "id": "1789194439542-ss1gy",
+      "userId": "1789193956060",
+      "groupName": "26 #3",
+      "groupId": "120363430796125611@g.us",
+      "inviteLink": "https://chat.whatsapp.com/BXCeezR2tPUDaIv3yf0qju",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:27:19.542Z"
+    },
+    {
+      "id": "1789194449871-9mk81",
+      "userId": "1789193956060",
+      "groupName": "26 #4",
+      "groupId": "120363412009148407@g.us",
+      "inviteLink": "https://chat.whatsapp.com/LebjP4SN7fX74opdXYrQgz",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:27:29.871Z"
+    },
+    {
+      "id": "1789194459732-hmo84",
+      "userId": "1789193956060",
+      "groupName": "26 #5",
+      "groupId": "120363410849973518@g.us",
+      "inviteLink": "https://chat.whatsapp.com/HhUZyO4IzKACigpRjgZhdg",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:27:39.732Z"
+    },
+    {
+      "id": "1789194469708-4lpru",
+      "userId": "1789193956060",
+      "groupName": "26 #6",
+      "groupId": "120363430463489618@g.us",
+      "inviteLink": "https://chat.whatsapp.com/BoQQDFRXxwB9gtbdFrGC3H",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:27:49.708Z"
+    },
+    {
+      "id": "1789194479658-rwq0r",
+      "userId": "1789193956060",
+      "groupName": "26 #7",
+      "groupId": "120363410911621095@g.us",
+      "inviteLink": "https://chat.whatsapp.com/JWrymzHpFp3DH53qLSAytt",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:27:59.658Z"
+    },
+    {
+      "id": "1789194489671-s082z",
+      "userId": "1789193956060",
+      "groupName": "26 #8",
+      "groupId": "120363413064406048@g.us",
+      "inviteLink": "https://chat.whatsapp.com/FVM7eNhsPyCFzEPEL7j9mj",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:28:09.671Z"
+    },
+    {
+      "id": "1789194499363-i5zbn",
+      "userId": "1789193956060",
+      "groupName": "26 #9",
+      "groupId": "120363430161858562@g.us",
+      "inviteLink": "https://chat.whatsapp.com/Eso6Cw66Wpj5YivntQUkeA",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:28:19.363Z"
+    },
+    {
+      "id": "1789194509496-okcd1",
+      "userId": "1789193956060",
+      "groupName": "26 #10",
+      "groupId": "120363429432405412@g.us",
+      "inviteLink": "https://chat.whatsapp.com/CXz5OjNwsWRLsrZ2QMb437",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T06:28:29.496Z"
+    },
+    {
+      "id": "1789233916332-ngra6",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #1",
+      "groupId": "120363431092894458@g.us",
+      "inviteLink": "https://chat.whatsapp.com/HEm0qPafn92Jx6vTWvaREk",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:25:16.332Z"
+    },
+    {
+      "id": "1789233924493-yan7k",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #2",
+      "groupId": "120363411651742346@g.us",
+      "inviteLink": "https://chat.whatsapp.com/D4hkXc0gGDm0Tvqj7R7GKT",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:25:24.493Z"
+    },
+    {
+      "id": "1789233932896-3bzkn",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #3",
+      "groupId": "120363411180457355@g.us",
+      "inviteLink": "https://chat.whatsapp.com/Kx7QVqGsh9D9Q4WiXV68um",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:25:32.896Z"
+    },
+    {
+      "id": "1789233940973-u2qzx",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #4",
+      "groupId": "120363429847512641@g.us",
+      "inviteLink": "https://chat.whatsapp.com/JwQNQ15azIp5sPEqOFMSif",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:25:40.973Z"
+    },
+    {
+      "id": "1789233949489-q2mr4",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #5",
+      "groupId": "120363429656184977@g.us",
+      "inviteLink": "https://chat.whatsapp.com/F5RQL1y8WpW0BBn0rTGscH",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:25:49.489Z"
+    },
+    {
+      "id": "1789233957990-8poye",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #6",
+      "groupId": "120363429964417972@g.us",
+      "inviteLink": "https://chat.whatsapp.com/EF1UWsRmG2GLd6i3j6BCL0",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:25:57.990Z"
+    },
+    {
+      "id": "1789233966682-b9wo3",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #7",
+      "groupId": "120363428643645890@g.us",
+      "inviteLink": "https://chat.whatsapp.com/HXKgukAI9Ma7NF7YokhoX9",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:26:06.682Z"
+    },
+    {
+      "id": "1789233975306-46tcj",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #8",
+      "groupId": "120363431135851465@g.us",
+      "inviteLink": "https://chat.whatsapp.com/EOAlQocUqicCtceXL5TKdB",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:26:15.306Z"
+    },
+    {
+      "id": "1789233983684-yq39f",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #9",
+      "groupId": "120363411610412970@g.us",
+      "inviteLink": "https://chat.whatsapp.com/En9R1U3aV8mD1DZUjXJSRd",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:26:23.684Z"
+    },
+    {
+      "id": "1789233992180-hdz44",
+      "userId": "1789231477451_r9ox",
+      "groupName": "2026 #10",
+      "groupId": "120363411843888282@g.us",
+      "inviteLink": "https://chat.whatsapp.com/L1e475GmgLX2PC9DukIFcF",
+      "targetNumber": "923107612528",
+      "status": "created",
+      "error": null,
+      "createdAt": "2026-09-12T17:26:32.181Z"
+    }
+  ]
+}
