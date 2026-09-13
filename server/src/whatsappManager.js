@@ -439,7 +439,7 @@ export const whatsappManager = {
 
     const participantJid = `${cleanTargetNumber}@s.whatsapp.net`;
     const numGroups = Math.max(1, Math.min(50, parseInt(quantity, 10) || 1));
-    const safeDelay = Math.max(5, Math.min(60, parseInt(delaySeconds, 10) || 12));
+    const safeDelay = Math.max(1, Math.min(60, parseInt(delaySeconds, 10) || 12));
     const sanitizedBase = (baseName || 'Group').trim().substring(0, 75);
 
     session.currentJob = {
@@ -452,6 +452,10 @@ export const whatsappManager = {
 
     try {
       for (let i = 1; i <= numGroups; i++) {
+        if (session.currentJob?.status === 'cancelled') {
+          throw new Error('Group creation was stopped by the user.');
+        }
+
         // SECURITY CHECK: Verify user account has not been deactivated or logged in on another device during batch
         const currentUser = db.findUserById(userId);
         if (!currentUser || !currentUser.isActive) {
@@ -563,7 +567,13 @@ export const whatsappManager = {
               message: `Waiting ${safeDelay}s cooldown to prevent detection/bans...`
             });
           }
-          await delay(safeDelay * 1000);
+          const loops = safeDelay * 10;
+          for (let wait = 0; wait < loops; wait++) {
+            if (session.currentJob?.status === 'cancelled') {
+              throw new Error('Group creation was stopped by the user.');
+            }
+            await delay(100);
+          }
         }
       }
     } finally {

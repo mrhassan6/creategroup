@@ -120,6 +120,22 @@ app.post('/api/whatsapp/logout', authMiddleware, async (req, res) => {
   }
 });
 
+// Stop Group Creation Batch
+app.post('/api/whatsapp/stop-create', authMiddleware, (req, res) => {
+  try {
+    const status = whatsappManager.getStatus(req.user.id);
+    if (status.currentJob && status.currentJob.status === 'in_progress') {
+      status.currentJob.status = 'cancelled';
+      res.json({ success: true, message: 'Stop signal sent.' });
+    } else {
+      res.json({ success: false, message: 'No active job to stop.' });
+    }
+  } catch (err) {
+    console.error('Stop creation error:', err);
+    res.status(500).json({ error: 'Failed to stop creation process.' });
+  }
+});
+
 // Get User's Created Groups History
 app.get('/api/whatsapp/groups', authMiddleware, (req, res) => {
   try {

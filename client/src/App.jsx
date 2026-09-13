@@ -128,6 +128,14 @@ export default function App() {
     }
   };
 
+  const handleStopCreation = async () => {
+    try {
+      await api.stopGroupCreation();
+    } catch (err) {
+      console.error('Failed to stop creation:', err);
+    }
+  };
+
   const handleStartCreation = ({ baseName, quantity, targetNumber, delaySeconds }) => {
     setCurrentJob({
       baseName,
@@ -247,6 +255,7 @@ export default function App() {
               <ExecutionMonitor
                 job={currentJob}
                 onReset={() => setCurrentJob(null)}
+                onStop={handleStopCreation}
               />
             )}
 

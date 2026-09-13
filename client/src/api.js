@@ -81,6 +81,12 @@ export const api = {
     return request('/whatsapp/groups');
   },
 
+  async stopGroupCreation() {
+    return request('/whatsapp/stop-create', {
+      method: 'POST'
+    });
+  },
+
   // ADMIN APIS
   async adminGetUsers() {
     return request('/admin/users');

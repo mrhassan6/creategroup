@@ -11,7 +11,7 @@ import {
   Share2
 } from 'lucide-react';
 
-export default function ExecutionMonitor({ job, onReset }) {
+export default function ExecutionMonitor({ job, onReset, onStop }) {
   const [copiedId, setCopiedId] = useState(null);
 
   if (!job) return null;
@@ -41,9 +41,27 @@ export default function ExecutionMonitor({ job, onReset }) {
           </h3>
         </div>
 
-        <span className={`status-badge ${job.isComplete ? 'connected' : 'pairing'}`}>
-          {job.isComplete ? 'Finished' : `${current} / ${total}`}
-        </span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {!job.isComplete && onStop && (
+            <button
+              onClick={onStop}
+              className="btn btn-secondary"
+              style={{
+                color: '#f87171',
+                borderColor: 'rgba(248, 113, 113, 0.3)',
+                padding: '0.2rem 0.6rem',
+                fontSize: '0.75rem',
+                height: 'auto',
+                minHeight: '0'
+              }}
+            >
+              Stop
+            </button>
+          )}
+          <span className={`status-badge ${job.isComplete ? 'connected' : 'pairing'}`}>
+            {job.isComplete ? 'Finished' : `${current} / ${total}`}
+          </span>
+        </div>
       </div>
 
       {/* Progress Track */}
