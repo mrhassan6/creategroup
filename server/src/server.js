@@ -17,6 +17,11 @@ import {
 } from './auth.js';
 import { whatsappManager } from './whatsappManager.js';
 import { db } from './db.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -223,6 +228,13 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
       res.end();
     }
   }
+});
+
+// Serve static client files for production (Render)
+app.use(express.static(path.join(__dirname, '../../client/dist')));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
 });
 
 // Global API error handler (e.g. for malformed JSON payload)
