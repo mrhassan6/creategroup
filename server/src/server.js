@@ -1,6 +1,6 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import {
   handleLogin,
@@ -23,8 +23,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config();
-
 // Global resilience handlers against uncaught crashes
 process.on('unhandledRejection', (reason, promise) => {
   console.warn('[Process] Unhandled Promise Rejection (safely caught):', reason?.message || reason);
@@ -32,6 +30,7 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (err) => {
   console.error('[Process] Uncaught Exception (safely caught):', err);
 });
+
 
 // AUTOMATED CLEANUP: Permanently delete expired accounts
 setInterval(() => {
