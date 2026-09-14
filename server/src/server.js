@@ -183,7 +183,7 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
   req.on('close', () => {
     clientClosed = true;
     clearInterval(heartbeatInterval);
-    console.log('[SSE] Client disconnected, marking job as cancelled if running.');
+    console.log('[SSE] Client disconnected, but group creation will continue safely in the background.');
   });
 
   const token = req.query.token;

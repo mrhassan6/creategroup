@@ -444,10 +444,6 @@ export const whatsappManager = {
            console.log(`[WhatsApp] Creation stopped by the user.`);
            break;
         }
-        if (checkClientClosed && checkClientClosed()) {
-          console.warn(`[WhatsApp] Client disconnected. Cancelling remaining groups.`);
-          break;
-        }
 
         const currentUser = db.findUserById(userId);
         if (!currentUser || !currentUser.isActive) throw new Error('User account was suspended.');
@@ -594,10 +590,6 @@ export const whatsappManager = {
           const loops = Math.ceil(totalWaitMs / 100);
           for (let wait = 0; wait < loops; wait++) {
             if (session.currentJob?.status === 'cancelled') {
-              shouldBreakLoop = true;
-              break;
-            }
-            if (checkClientClosed && checkClientClosed()) {
               shouldBreakLoop = true;
               break;
             }
