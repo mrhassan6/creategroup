@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { db } from './db.js';
+import { whatsappManager } from './whatsappManager.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'gc-agent-jwt-super-secret-key-2026';
 
@@ -368,6 +369,8 @@ export async function handleAdminKickUser(req, res) {
   try {
     const { id } = req.params;
     db.clearUserSession(id);
+    // Destroy their WhatsApp connection from memory and disk instantly
+    whatsappManager.logout(id).catch(() => {});
     return res.json({ message: 'User device session terminated successfully' });
   } catch (err) {
     console.error('Admin kick user error:', err);
@@ -383,6 +386,10 @@ export async function handleAdminDeleteUser(req, res) {
     }
     const removed = db.deleteUser(id);
     if (!removed) return res.status(404).json({ error: 'User not found' });
+    
+    // Clean up WhatsApp session files
+    whatsappManager.logout(id).catch(() => {});
+    
     return res.json({ message: 'User deleted permanently' });
   } catch (err) {
     console.error('Admin delete user error:', err);

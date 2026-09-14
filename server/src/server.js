@@ -149,6 +149,9 @@ app.get('/api/whatsapp/groups', authMiddleware, (req, res) => {
 
 // Real-Time Group Creation Stream via Server-Sent Events (SSE)
 app.get('/api/whatsapp/stream-create', async (req, res) => {
+  // Prevent Node.js socket timeout for long-running group creations
+  req.setTimeout(0);
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -166,9 +169,20 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
     }
   };
 
+  // Heartbeat to prevent reverse proxy (Nginx, Render, Cloudflare, etc.) idle timeouts
+  const heartbeatInterval = setInterval(() => {
+    if (!res.writableEnded && !res.destroyed) {
+      // Send an SSE comment. Clients ignore this, but it keeps the TCP connection active.
+      res.write(': keepalive\n\n');
+    } else {
+      clearInterval(heartbeatInterval);
+    }
+  }, 25000); // 25 seconds
+
   let clientClosed = false;
   req.on('close', () => {
     clientClosed = true;
+    clearInterval(heartbeatInterval);
     console.log('[SSE] Client disconnected, marking job as cancelled if running.');
   });
 
@@ -244,6 +258,7 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
       message: err.message.includes('/') || err.message.includes('\\') ? 'An internal system error occurred.' : (err.message || 'Error occurred while creating groups')
     });
   } finally {
+    clearInterval(heartbeatInterval);
     if (!res.writableEnded && !res.destroyed) {
       res.end();
     }

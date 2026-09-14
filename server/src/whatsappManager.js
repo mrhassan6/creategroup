@@ -458,7 +458,8 @@ export const whatsappManager = {
         if (!session.isConnected || !session.sock?.ws?.isOpen) {
           for (let waitSec = 0; waitSec < 8; waitSec++) {
             await delay(1000);
-            session = userSessions.get(senderNumber) || session;
+            // FIX: Use cleanSender instead of the raw senderNumber when fetching the session map
+            session = userSessions.get(cleanSender) || session;
             if (session.isConnected && session.sock?.ws?.isOpen) break;
           }
         }
