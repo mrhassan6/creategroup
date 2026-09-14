@@ -83,6 +83,12 @@ export const whatsappManager = {
         const match = entry.match(/^user_(.+)_(.+)$/);
         if (match && match[1] === userId) {
           const phoneNumber = match[2];
+          
+          // Ignore corrupted folders from previous bugs (e.g. user_..._undefined)
+          if (!phoneNumber || phoneNumber === 'undefined' || phoneNumber.length < 5) {
+            continue;
+          }
+
           if (!userSessions.has(phoneNumber)) {
             const credsPath = path.join(SESSIONS_DIR, entry, 'creds.json');
             if (fs.existsSync(credsPath)) {
@@ -391,13 +397,17 @@ export const whatsappManager = {
 
   async createGroupsBatch(userId, { baseName, quantity, targetNumber, delaySeconds = 12, senderNumber, creationType = 'group', expectedSessionId, onProgress, checkClientClosed }) {
     const userSessions = getUserSessionsMap(userId);
-    let session = userSessions.get(senderNumber);
+    const cleanSender = normalizePhoneNumber(senderNumber);
+    let session = userSessions.get(cleanSender);
     
     // Auto-wake sleeping sessions or wait for connecting sessions
     if (!session || (!session.isConnected && session.status === 'sleeping')) {
-      session = await whatsappManager.initUserSession(userId, senderNumber, false);
+      session = await whatsappManager.initUserSession(userId, cleanSender, false);
     }
-    if (!session) throw new Error(`WhatsApp device ${senderNumber} is not linked.`);
+    if (!session) {
+      console.error(`[WhatsApp] Failed to find linked device. userId: ${userId}, passed sender: ${senderNumber}, cleanSender: ${cleanSender}`);
+      throw new Error(`WhatsApp device ${cleanSender} is not linked to your account. Try refreshing the page or re-linking your device.`);
+    }
     
     if (!session.isConnected) {
       for (let w = 0; w < 15; w++) {

@@ -136,7 +136,7 @@ export default function App() {
     }
   };
 
-  const handleStartCreation = ({ baseName, quantity, targetNumber, delaySeconds }) => {
+  const handleStartCreation = ({ baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType }) => {
     setCurrentJob({
       baseName,
       quantity,
@@ -153,6 +153,8 @@ export default function App() {
       quantity,
       targetNumber,
       delaySeconds,
+      senderNumber,
+      creationType,
       onProgress: (data) => {
         setCurrentJob((prev) => {
           if (!prev) return null;
