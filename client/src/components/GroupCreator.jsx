@@ -8,6 +8,7 @@ export default function GroupCreator({ waStatus, isLinked, onStartCreation, disa
   const [delaySeconds, setDelaySeconds] = useState(12);
   const [senderNumber, setSenderNumber] = useState('');
   const [creationType, setCreationType] = useState('group');
+  const [applyToAll, setApplyToAll] = useState(false);
   const [error, setError] = useState(null);
 
   const statuses = Array.isArray(waStatus) ? waStatus : [];
@@ -40,7 +41,7 @@ export default function GroupCreator({ waStatus, isLinked, onStartCreation, disa
       setError('Please link your WhatsApp device first!');
       return;
     }
-    if (!senderNumber) {
+    if (!applyToAll && !senderNumber) {
       setError('Please select a sender device.');
       return;
     }
@@ -51,7 +52,9 @@ export default function GroupCreator({ waStatus, isLinked, onStartCreation, disa
       targetNumber: targetNumber.trim(),
       delaySeconds: Math.max(1, parseInt(delaySeconds, 10) || 12),
       senderNumber: senderNumber,
-      creationType: creationType
+      creationType: creationType,
+      applyToAll,
+      connectedDevices
     });
   };
 
@@ -93,19 +96,31 @@ export default function GroupCreator({ waStatus, isLinked, onStartCreation, disa
       <form onSubmit={handleSubmit}>
         {/* Sender Device Selection */}
         <div className="form-group" style={{ marginBottom: '1rem' }}>
-          <label className="form-label">
-            <span>Sender Device</span>
-          </label>
-          <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label className="form-label">
+              <span>Sender Device</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={applyToAll}
+                onChange={(e) => setApplyToAll(e.target.checked)}
+                disabled={disabled || !isLinked || connectedDevices.length === 0}
+                style={{ accentColor: 'var(--wa-green)' }}
+              />
+              Apply to all paired numbers
+            </label>
+          </div>
+          <div style={{ position: 'relative', opacity: applyToAll ? 0.5 : 1, transition: 'opacity 0.2s' }}>
             <select
               className="input-field"
               style={{ width: '100%', paddingLeft: '2.5rem', appearance: 'none', backgroundColor: 'rgba(0,0,0,0.2)' }}
-              value={senderNumber}
+              value={applyToAll ? '' : senderNumber}
               onChange={(e) => setSenderNumber(e.target.value)}
-              required
-              disabled={disabled || !isLinked}
+              required={!applyToAll}
+              disabled={disabled || !isLinked || applyToAll}
             >
-              <option value="" disabled>Select a connected device</option>
+              <option value="" disabled>{applyToAll ? `Using all ${connectedDevices.length} connected devices` : 'Select a connected device'}</option>
               {connectedDevices.map(device => (
                 <option key={device.phoneNumber} value={device.phoneNumber}>
                   +{device.phoneNumber}
@@ -258,7 +273,7 @@ export default function GroupCreator({ waStatus, isLinked, onStartCreation, disa
           type="submit"
           className="btn btn-primary"
           style={{ width: '100%', padding: '0.95rem' }}
-          disabled={disabled || !isLinked || !senderNumber}
+          disabled={disabled || !isLinked || (!applyToAll && !senderNumber)}
         >
           <Play size={18} fill="#032512" />
           <span>Launch Creation Agent</span>

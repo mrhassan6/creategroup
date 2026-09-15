@@ -50,10 +50,17 @@ export async function initDb() {
       targetNumber TEXT,
       status TEXT,
       error TEXT,
+      senderNumber TEXT,
       createdAt TEXT NOT NULL,
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
+
+  try {
+    dbConn.exec("ALTER TABLE groups ADD COLUMN senderNumber TEXT");
+  } catch (e) {
+    // Column might already exist, ignore
+  }
 
   // Migrate old JSON data if it exists and we haven't migrated
   if (fs.existsSync(JSON_DB_FILE)) {
@@ -67,8 +74,8 @@ export async function initDb() {
       `);
       
       const insertGroup = dbConn.prepare(`
-        INSERT OR IGNORE INTO groups (id, userId, groupName, groupId, inviteLink, targetNumber, status, error, createdAt)
-        VALUES (@id, @userId, @groupName, @groupId, @inviteLink, @targetNumber, @status, @error, @createdAt)
+        INSERT OR IGNORE INTO groups (id, userId, groupName, groupId, inviteLink, targetNumber, status, error, senderNumber, createdAt)
+        VALUES (@id, @userId, @groupName, @groupId, @inviteLink, @targetNumber, @status, @error, @senderNumber, @createdAt)
       `);
 
       dbConn.transaction(() => {
@@ -101,6 +108,7 @@ export async function initDb() {
                 targetNumber: g.targetNumber || '',
                 status: g.status || '',
                 error: g.error || null,
+                senderNumber: g.senderNumber || null,
                 createdAt: g.createdAt || new Date().toISOString()
              });
           }
@@ -300,7 +308,7 @@ export const db = {
     return user;
   },
 
-  saveGroupRecord({ userId, groupName, groupId, inviteLink, targetNumber, status, error }) {
+  saveGroupRecord({ userId, groupName, groupId, inviteLink, targetNumber, status, error, senderNumber }) {
     ensureInit();
     const record = {
       id: Date.now().toString() + '-' + Math.random().toString(36).substring(2, 7),
@@ -311,12 +319,13 @@ export const db = {
       targetNumber,
       status: status || 'success',
       error: error || null,
+      senderNumber: senderNumber || null,
       createdAt: new Date().toISOString()
     };
     
     dbConn.prepare(`
-      INSERT INTO groups (id, userId, groupName, groupId, inviteLink, targetNumber, status, error, createdAt)
-      VALUES (@id, @userId, @groupName, @groupId, @inviteLink, @targetNumber, @status, @error, @createdAt)
+      INSERT INTO groups (id, userId, groupName, groupId, inviteLink, targetNumber, status, error, senderNumber, createdAt)
+      VALUES (@id, @userId, @groupName, @groupId, @inviteLink, @targetNumber, @status, @error, @senderNumber, @createdAt)
     `).run(record);
     
     return record;

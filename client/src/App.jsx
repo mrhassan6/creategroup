@@ -131,64 +131,113 @@ export default function App() {
   const handleStopCreation = async () => {
     try {
       await api.stopGroupCreation();
+      setCurrentJob(prev => prev ? { ...prev, stopped: true } : null);
     } catch (err) {
       console.error('Failed to stop creation:', err);
     }
   };
 
-  const handleStartCreation = ({ baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType }) => {
+  const handleStartCreation = async ({ baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType, applyToAll, connectedDevices }) => {
+    const senders = applyToAll && connectedDevices ? connectedDevices.map(d => d.phoneNumber) : [senderNumber];
+    let totalQuantity = quantity * senders.length;
+
     setCurrentJob({
       baseName,
       quantity,
       targetNumber,
       current: 0,
-      total: quantity,
+      total: totalQuantity,
       message: 'Initializing WhatsApp Group Agent...',
       results: [],
-      isComplete: false
+      isComplete: false,
+      stopped: false
     });
 
-    api.streamGroupCreation({
-      baseName,
-      quantity,
-      targetNumber,
-      delaySeconds,
-      senderNumber,
-      creationType,
-      onProgress: (data) => {
-        setCurrentJob((prev) => {
-          if (!prev) return null;
-          const updatedResults = [...(prev.results || [])];
-          if (data.record) {
-            updatedResults.push(data.record);
+    let overallResults = [];
+    let overallCurrent = 0;
+    let globalStop = false;
+    let finalMessage = 'All groups created successfully!';
+
+    for (let i = 0; i < senders.length; i++) {
+      if (globalStop) break;
+      const currentSender = senders[i];
+      let senderProcessed = 0;
+
+      setCurrentJob(prev => {
+        if (!prev || prev.stopped) {
+          globalStop = true;
+          return prev;
+        }
+        return {
+          ...prev,
+          message: `Starting creation for device +${currentSender} (${i + 1}/${senders.length})...`
+        };
+      });
+
+      if (globalStop) break;
+
+      await new Promise((resolve) => {
+        const unsubscribe = api.streamGroupCreation({
+          baseName,
+          quantity,
+          targetNumber,
+          delaySeconds,
+          senderNumber: currentSender,
+          creationType,
+          onProgress: (data) => {
+            setCurrentJob((prev) => {
+              if (!prev) {
+                globalStop = true;
+                return null;
+              }
+              if (prev.stopped) {
+                globalStop = true;
+                return prev;
+              }
+              const updatedResults = [...overallResults];
+              if (data.record) {
+                updatedResults.push(data.record);
+                overallResults = updatedResults;
+              }
+              
+              if (data.step === 'success' || data.step === 'failed') {
+                 overallCurrent++;
+                 senderProcessed++;
+              }
+
+              return {
+                ...prev,
+                current: overallCurrent,
+                total: totalQuantity,
+                message: data.message ? `[+${currentSender}] ${data.message}` : prev.message,
+                results: updatedResults
+              };
+            });
+          },
+          onComplete: (data) => {
+            resolve();
+          },
+          onError: (errMsg) => {
+            finalMessage = `Notice on +${currentSender}: ${errMsg}`;
+            resolve();
           }
-          return {
-            ...prev,
-            current: data.current !== undefined ? data.current : prev.current,
-            total: data.total !== undefined ? data.total : prev.total,
-            message: data.message || prev.message,
-            results: updatedResults
-          };
         });
-      },
-      onComplete: (data) => {
-        setCurrentJob((prev) => ({
-          ...(prev || {}),
-          isComplete: true,
-          message: data.message || 'All groups created successfully!',
-          results: data.results || prev?.results || []
-        }));
-        handleRefreshGroups();
-      },
-      onError: (errMsg) => {
-        setCurrentJob((prev) => ({
-          ...(prev || {}),
-          isComplete: true,
-          message: `Notice: ${errMsg}`
-        }));
-        handleRefreshGroups();
+      });
+
+      const skipped = quantity - senderProcessed;
+      if (skipped > 0 && !globalStop) {
+         totalQuantity -= skipped;
+         setCurrentJob(prev => prev ? { ...prev, total: totalQuantity } : null);
       }
-    });
+    }
+
+    setCurrentJob((prev) => ({
+      ...(prev || {}),
+      isComplete: true,
+      message: prev?.stopped ? 'Creation process was stopped by user.' : finalMessage,
+      results: overallResults
+    }));
+    handleRefreshGroups();
   };
 
   if (authLoading) {

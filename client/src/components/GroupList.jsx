@@ -4,6 +4,12 @@ import { Layers, Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
 export default function GroupList({ groups, onRefresh, loading }) {
   const [copiedId, setCopiedId] = useState(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [selectedSender, setSelectedSender] = useState('All');
+
+  const uniqueSenders = ['All', ...new Set(groups.map(g => g.senderNumber).filter(Boolean))];
+  const displayedGroups = selectedSender === 'All' 
+    ? groups 
+    : groups.filter(g => g.senderNumber === selectedSender);
 
   const copyToClipboard = (text) => {
     if (navigator.clipboard && window.isSecureContext) {
@@ -30,7 +36,7 @@ export default function GroupList({ groups, onRefresh, loading }) {
   };
 
   const handleCopyAll = () => {
-    const successfulGroups = groups.filter((g) => g.inviteLink);
+    const successfulGroups = displayedGroups.filter((g) => g.inviteLink);
     if (successfulGroups.length === 0) return;
 
     const linksText = successfulGroups
@@ -90,18 +96,42 @@ export default function GroupList({ groups, onRefresh, loading }) {
         </div>
       </div>
 
-      {groups.length === 0 ? (
+      {uniqueSenders.length > 1 && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', overflowX: 'auto', paddingBottom: '4px' }}>
+          {uniqueSenders.map(sender => (
+            <button
+              key={sender}
+              onClick={() => setSelectedSender(sender)}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '999px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                background: selectedSender === sender ? 'rgba(37, 211, 102, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                color: selectedSender === sender ? 'var(--wa-green)' : 'var(--text-muted)',
+                border: `1px solid ${selectedSender === sender ? 'rgba(37, 211, 102, 0.4)' : 'transparent'}`,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {sender === 'All' ? 'All Groups' : `+${sender}`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {displayedGroups.length === 0 ? (
         <div style={{
           textAlign: 'center',
           padding: '2rem 1rem',
           color: 'var(--text-muted)',
           fontSize: '0.85rem'
         }}>
-          No groups created yet. Launch your first group creation above!
+          No groups created yet for this selection.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '320px', overflowY: 'auto', paddingRight: '4px' }}>
-          {groups.map((g) => (
+          {displayedGroups.map((g) => (
             <div
               key={g.id}
               style={{

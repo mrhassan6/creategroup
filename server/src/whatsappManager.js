@@ -238,8 +238,8 @@ export const whatsappManager = {
 
     const userSessions = getUserSessionsMap(userId);
     
-    if (userSessions.size >= 5 && !userSessions.has(cleanNumber)) {
-      throw new Error('Maximum limit of 5 linked devices reached. Please unlink a device first.');
+    if (userSessions.size >= 10 && !userSessions.has(cleanNumber)) {
+      throw new Error('Maximum limit of 10 linked devices reached. Please unlink a device first.');
     }
 
     const existing = userSessions.get(cleanNumber);
@@ -537,10 +537,8 @@ export const whatsappManager = {
           errorMsg = err.message || 'Creation failed';
           if (errorMsg.toLowerCase().includes('rate-overlimit') || errorMsg.toLowerCase().includes('resource-limit') || errorMsg.includes('429')) {
             errorMsg = `WhatsApp Rate Limit: ${errorMsg}. Pausing to protect account.`;
-            shouldBreakLoop = true;
-          } else if (errorMsg.includes('timed out') || errorMsg.includes('Stream Errored')) {
-             shouldBreakLoop = true;
           }
+          shouldBreakLoop = true;
         }
 
         const record = db.saveGroupRecord({
@@ -550,7 +548,8 @@ export const whatsappManager = {
           inviteLink,
           targetNumber: cleanTargetNumber,
           status: createdEntity ? 'created' : 'failed',
-          error: errorMsg
+          error: errorMsg,
+          senderNumber: cleanSender
         });
         results.push(record);
 
