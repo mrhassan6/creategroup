@@ -9,7 +9,8 @@ import {
   Lock,
   ChevronRight,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Activity
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -19,7 +20,8 @@ export default function Sidebar({
   onSelectTab,
   user,
   waStatus,
-  onLogout
+  onLogout,
+  currentJob
 }) {
   if (!isOpen) return null;
 
@@ -35,6 +37,13 @@ export default function Sidebar({
       id: 'create',
       label: 'Group Creator',
       icon: Users
+    },
+    {
+      id: 'processes',
+      label: 'Processes',
+      icon: Activity,
+      badge: currentJob && !currentJob.isComplete && !currentJob.stopped ? 'Running' : null,
+      badgeClass: 'connected' // Using connected class for a green badge
     },
     {
       id: 'history',

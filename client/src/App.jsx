@@ -7,7 +7,7 @@ import DeviceLink from './components/DeviceLink';
 import GroupCreator from './components/GroupCreator';
 import ExecutionMonitor from './components/ExecutionMonitor';
 import GroupList from './components/GroupList';
-import { Smartphone, Users, Layers } from 'lucide-react';
+import { Smartphone, Users, Layers, Activity } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -138,8 +138,11 @@ export default function App() {
   };
 
   const handleStartCreation = async ({ baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType, applyToAll, connectedDevices }) => {
+    setActiveTab('processes');
     const senders = applyToAll && connectedDevices ? connectedDevices.map(d => d.phoneNumber) : [senderNumber];
-    let totalQuantity = quantity * senders.length;
+    
+    // Total groups we want to create overall (quantity per sender)
+    const totalQuantity = quantity * senders.length;
 
     setCurrentJob({
       baseName,
@@ -179,7 +182,7 @@ export default function App() {
       await new Promise((resolve) => {
         const unsubscribe = api.streamGroupCreation({
           baseName,
-          quantity,
+          quantity, // 50 groups for this specific number
           targetNumber,
           delaySeconds,
           senderNumber: currentSender,
@@ -224,10 +227,12 @@ export default function App() {
         });
       });
 
+      // If the sender failed early (e.g. rate limit), it didn't process all 'quantity' groups.
+      // We skip the remaining groups for this sender so the progress bar stays accurate.
       const skipped = quantity - senderProcessed;
       if (skipped > 0 && !globalStop) {
-         totalQuantity -= skipped;
-         setCurrentJob(prev => prev ? { ...prev, total: totalQuantity } : null);
+         overallCurrent += skipped;
+         setCurrentJob(prev => prev ? { ...prev, current: overallCurrent } : null);
       }
     }
 
@@ -281,6 +286,7 @@ export default function App() {
         user={user}
         waStatus={waStatus}
         onLogout={handleLogout}
+        currentJob={currentJob}
       />
 
       {/* Main Content Area */}
@@ -300,24 +306,12 @@ export default function App() {
 
         {/* TAB 2: GROUP CREATOR */}
         {activeTab === 'create' && (
-          <>
-            {currentJob && (
-              <ExecutionMonitor
-                job={currentJob}
-                onReset={() => setCurrentJob(null)}
-                onStop={handleStopCreation}
-              />
-            )}
-
-            {(!currentJob || currentJob.isComplete) && (
-              <GroupCreator
-                waStatus={waStatus || []}
-                isLinked={Array.isArray(waStatus) && waStatus.some(s => s.isConnected)}
-                onStartCreation={handleStartCreation}
-                disabled={!Array.isArray(waStatus) || !waStatus.some(s => s.isConnected)}
-              />
-            )}
-          </>
+          <GroupCreator
+            waStatus={waStatus || []}
+            isLinked={Array.isArray(waStatus) && waStatus.some(s => s.isConnected)}
+            onStartCreation={handleStartCreation}
+            disabled={!Array.isArray(waStatus) || !waStatus.some(s => s.isConnected) || (currentJob && !currentJob.isComplete && !currentJob.stopped)}
+          />
         )}
 
         {/* TAB 3: GROUPS HISTORY */}
@@ -327,6 +321,25 @@ export default function App() {
             onRefresh={handleRefreshGroups}
             loading={groupsLoading}
           />
+        )}
+
+        {/* TAB 4: PROCESSES */}
+        {activeTab === 'processes' && (
+          <>
+            {currentJob ? (
+              <ExecutionMonitor
+                job={currentJob}
+                onReset={() => setCurrentJob(null)}
+                onStop={handleStopCreation}
+              />
+            ) : (
+              <div className="glass-panel" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+                <Activity size={48} color="var(--text-muted)" style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+                <h3 style={{ color: '#fff', fontSize: '1.2rem', marginBottom: '0.5rem' }}>No Active Processes</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Start a group creation task from the Group Creator to see it here.</p>
+              </div>
+            )}
+          </>
         )}
 
       </main>
@@ -383,6 +396,25 @@ export default function App() {
         >
           <Users size={18} />
           <span>Creator</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('processes')}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: activeTab === 'processes' ? 'var(--wa-green)' : 'var(--text-muted)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '3px',
+            fontSize: '0.7rem',
+            fontWeight: activeTab === 'processes' ? 700 : 500,
+            cursor: 'pointer'
+          }}
+        >
+          <Activity size={18} />
+          <span>Processes</span>
         </button>
 
         <button

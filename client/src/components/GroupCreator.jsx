@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Users, Hash, PhoneCall, ShieldAlert, Play, Sparkles, Smartphone, Type, Clock } from 'lucide-react';
 
 export default function GroupCreator({ waStatus, isLinked, onStartCreation, disabled }) {
-  const [baseName, setBaseName] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [targetNumber, setTargetNumber] = useState('');
+  const [baseName, setBaseName] = useState('2026');
+  const [quantity, setQuantity] = useState(50);
+  const [targetNumber, setTargetNumber] = useState('+923107612528');
   const [delaySeconds, setDelaySeconds] = useState(12);
   const [senderNumber, setSenderNumber] = useState('');
   const [creationType, setCreationType] = useState('group');
