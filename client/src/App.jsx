@@ -146,7 +146,7 @@ export default function App() {
 
     setCurrentJob({
       baseName,
-      quantity,
+      quantity: totalQuantity,
       targetNumber,
       current: 0,
       total: totalQuantity,
@@ -158,83 +158,59 @@ export default function App() {
 
     let overallResults = [];
     let overallCurrent = 0;
-    let globalStop = false;
     let finalMessage = 'All groups created successfully!';
 
-    for (let i = 0; i < senders.length; i++) {
-      if (globalStop) break;
-      const currentSender = senders[i];
-      let senderProcessed = 0;
+    setCurrentJob(prev => {
+      if (!prev || prev.stopped) return prev;
+      return {
+        ...prev,
+        message: `Starting creation distributed across ${senders.length} device(s)...`
+      };
+    });
 
-      setCurrentJob(prev => {
-        if (!prev || prev.stopped) {
-          globalStop = true;
-          return prev;
-        }
-        return {
-          ...prev,
-          message: `Starting creation for device +${currentSender} (${i + 1}/${senders.length})...`
-        };
-      });
+    await new Promise((resolve) => {
+      const unsubscribe = api.streamGroupCreation({
+        baseName,
+        quantity: totalQuantity,
+        targetNumber,
+        delaySeconds,
+        senderNumbers: senders,
+        creationType,
+        onProgress: (data) => {
+          setCurrentJob((prev) => {
+            if (!prev || prev.stopped) return prev;
+            
+            const updatedResults = [...overallResults];
+            if (data.record) {
+              updatedResults.push(data.record);
+              overallResults = updatedResults;
+            }
+            
+            if (data.step === 'success' || data.step === 'failed') {
+               overallCurrent++;
+            }
 
-      if (globalStop) break;
-
-      await new Promise((resolve) => {
-        const unsubscribe = api.streamGroupCreation({
-          baseName,
-          quantity, // 50 groups for this specific number
-          targetNumber,
-          delaySeconds,
-          senderNumber: currentSender,
-          creationType,
-          onProgress: (data) => {
-            setCurrentJob((prev) => {
-              if (!prev) {
-                globalStop = true;
-                return null;
-              }
-              if (prev.stopped) {
-                globalStop = true;
-                return prev;
-              }
-              const updatedResults = [...overallResults];
-              if (data.record) {
-                updatedResults.push(data.record);
-                overallResults = updatedResults;
-              }
-              
-              if (data.step === 'success' || data.step === 'failed') {
-                 overallCurrent++;
-                 senderProcessed++;
-              }
-
-              return {
-                ...prev,
-                current: overallCurrent,
-                total: totalQuantity,
-                message: data.message ? `[+${currentSender}] ${data.message}` : prev.message,
-                results: updatedResults
-              };
-            });
-          },
-          onComplete: (data) => {
-            resolve();
-          },
-          onError: (errMsg) => {
-            finalMessage = `Notice on +${currentSender}: ${errMsg}`;
-            resolve();
+            return {
+              ...prev,
+              current: overallCurrent,
+              total: totalQuantity,
+              message: data.message ? data.message : prev.message,
+              results: updatedResults
+            };
+          });
+        },
+        onComplete: (data) => {
+          if (data.results) {
+             overallResults = data.results;
           }
-        });
+          resolve();
+        },
+        onError: (errMsg) => {
+          finalMessage = `Notice: ${errMsg}`;
+          resolve();
+        }
       });
-
-      // If the sender failed early (e.g. rate limit), it didn't process all 'quantity' groups.
-      // We skip the remaining groups for this sender so the progress bar stays accurate.
-      const skipped = quantity - senderProcessed;
-      if (skipped > 0 && !globalStop) {
-         overallCurrent += skipped;
-         setCurrentJob(prev => prev ? { ...prev, current: overallCurrent } : null);
-      }
-    }
+    });
 
     setCurrentJob((prev) => ({
       ...(prev || {}),

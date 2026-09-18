@@ -133,7 +133,7 @@ export const api = {
     });
   },
 
-  streamGroupCreation({ baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType, onProgress, onComplete, onError }) {
+  streamGroupCreation({ baseName, quantity, targetNumber, delaySeconds, senderNumbers, creationType, onProgress, onComplete, onError }) {
     const token = getStoredToken();
     const params = new URLSearchParams({
       token,
@@ -141,7 +141,7 @@ export const api = {
       quantity,
       targetNumber,
       delaySeconds,
-      senderNumber,
+      senderNumbers: JSON.stringify(senderNumbers),
       creationType
     });
 

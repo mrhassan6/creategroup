@@ -212,9 +212,22 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
     return res.end();
   }
 
-  const { baseName, quantity, targetNumber, delaySeconds, senderNumber, creationType } = req.query;
-  if (!baseName || !targetNumber || !senderNumber) {
-    sendEvent('error', { error: 'VALIDATION_ERROR', message: 'baseName, targetNumber, and senderNumber are required' });
+  const { baseName, quantity, targetNumber, delaySeconds, senderNumber, senderNumbers, creationType } = req.query;
+  
+  let parsedSenderNumbers = [];
+  try {
+    if (senderNumbers) {
+      parsedSenderNumbers = JSON.parse(senderNumbers);
+    } else if (senderNumber) {
+      parsedSenderNumbers = [senderNumber];
+    }
+  } catch (e) {
+    sendEvent('error', { error: 'VALIDATION_ERROR', message: 'Invalid senderNumbers format.' });
+    return res.end();
+  }
+
+  if (!baseName || !targetNumber || parsedSenderNumbers.length === 0) {
+    sendEvent('error', { error: 'VALIDATION_ERROR', message: 'baseName, targetNumber, and at least one senderNumber are required' });
     return res.end();
   }
   if (typeof targetNumber !== 'string' || targetNumber.length > 30) {
@@ -235,7 +248,7 @@ app.get('/api/whatsapp/stream-create', async (req, res) => {
       quantity,
       targetNumber,
       delaySeconds: parseInt(delaySeconds, 10) || 12,
-      senderNumber,
+      senderNumbers: parsedSenderNumbers,
       creationType,
       expectedSessionId: sessionId,
       onProgress: (progressData) => {

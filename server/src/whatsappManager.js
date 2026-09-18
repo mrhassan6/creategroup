@@ -395,32 +395,56 @@ export const whatsappManager = {
     return { success: true };
   },
 
-  async createGroupsBatch(userId, { baseName, quantity, targetNumber, delaySeconds = 12, senderNumber, creationType = 'group', expectedSessionId, onProgress, checkClientClosed }) {
+  async createGroupsBatch(userId, { baseName, quantity, targetNumber, delaySeconds = 12, senderNumber, senderNumbers = [], creationType = 'group', expectedSessionId, onProgress, checkClientClosed }) {
     const userSessions = getUserSessionsMap(userId);
-    const cleanSender = normalizePhoneNumber(senderNumber);
-    let session = userSessions.get(cleanSender);
     
-    // Auto-wake sleeping sessions or wait for connecting sessions
-    if (!session || (!session.isConnected && session.status === 'sleeping')) {
-      session = await whatsappManager.initUserSession(userId, cleanSender, false);
+    // Support backward compatibility if only `senderNumber` string is passed
+    let rawSenders = Array.isArray(senderNumbers) && senderNumbers.length > 0 
+      ? senderNumbers 
+      : (senderNumber ? [senderNumber] : []);
+      
+    if (rawSenders.length === 0) {
+      throw new Error('No sender devices provided.');
     }
-    if (!session) {
-      console.error(`[WhatsApp] Failed to find linked device. userId: ${userId}, passed sender: ${senderNumber}, cleanSender: ${cleanSender}`);
-      throw new Error(`WhatsApp device ${cleanSender} is not linked to your account. Try refreshing the page or re-linking your device.`);
+
+    const cleanSenders = rawSenders.map(normalizePhoneNumber).filter(n => n.length >= 9);
+    if (cleanSenders.length === 0) {
+       throw new Error('No valid sender devices provided.');
     }
+
+    const activeSessionsPool = [];
     
-    if (!session.isConnected) {
-      for (let w = 0; w < 15; w++) {
-        if (session.isConnected) break;
-        await delay(1000);
+    // Initialize or fetch all requested sessions
+    for (const cleanSender of cleanSenders) {
+      let session = userSessions.get(cleanSender);
+      if (!session || (!session.isConnected && session.status === 'sleeping')) {
+        session = await whatsappManager.initUserSession(userId, cleanSender, false);
+      }
+      
+      if (!session) {
+        console.warn(`[WhatsApp] Failed to find linked device ${cleanSender}. Skipping for this batch.`);
+        continue;
+      }
+      
+      if (!session.isConnected) {
+        // Wait up to 15 seconds for connection
+        for (let w = 0; w < 15; w++) {
+          if (session.isConnected) break;
+          await delay(1000);
+        }
+      }
+      
+      if (session.isConnected) {
+        if (session.currentJob && session.currentJob.status === 'in_progress') {
+           console.warn(`[WhatsApp] Device ${cleanSender} is already busy. Skipping for this batch.`);
+        } else {
+           activeSessionsPool.push({ phone: cleanSender, session });
+        }
       }
     }
-    if (!session.isConnected) throw new Error('WhatsApp connection is not ready or taking too long.');
 
-    session.lastActivity = Date.now(); // Reset idle timer
-
-    if (session.currentJob && session.currentJob.status === 'in_progress') {
-      throw new Error('A creation job is already running on this device.');
+    if (activeSessionsPool.length === 0) {
+      throw new Error('None of the selected WhatsApp devices are connected and ready.');
     }
 
     const cleanTargetNumber = normalizePhoneNumber(targetNumber);
@@ -429,19 +453,33 @@ export const whatsappManager = {
     }
 
     const participantJid = `${cleanTargetNumber}@s.whatsapp.net`;
-    const numGroups = Math.max(1, Math.min(50, parseInt(quantity, 10) || 1));
+    const numGroups = Math.max(1, Math.min(500, parseInt(quantity, 10) || 1)); // allow up to 500 total now since it's spread out
     const safeDelay = Math.max(1, parseInt(delaySeconds, 10) || 1);
     const sanitizedBase = (baseName || 'Group').trim().substring(0, 75);
 
-    session.currentJob = { total: numGroups, current: 0, status: 'in_progress' };
+    // Set job status on all participating devices
+    const jobData = { total: numGroups, current: 0, status: 'in_progress' };
+    for (const { session } of activeSessionsPool) {
+      session.currentJob = jobData;
+      session.lastActivity = Date.now();
+    }
+
     const results = [];
+    let senderIndex = 0;
+    
+    let cancelled = false;
 
     try {
       for (let i = 1; i <= numGroups; i++) {
-        session.lastActivity = Date.now(); // Keep awake during job
-        
-        if (session.currentJob?.status === 'cancelled') {
+        if (activeSessionsPool.length === 0) {
+           if (onProgress) onProgress({ step: 'failed', current: i, total: numGroups, message: 'All participating devices encountered errors or were rate limited. Stopping batch.' });
+           break;
+        }
+
+        // Check cancellation on the shared job object
+        if (jobData.status === 'cancelled') {
            console.log(`[WhatsApp] Creation stopped by the user.`);
+           cancelled = true;
            break;
         }
 
@@ -451,17 +489,36 @@ export const whatsappManager = {
           throw new Error('Account logged in on another device.');
         }
 
-        if (!session.isConnected || !session.sock?.ws?.isOpen) {
-          for (let waitSec = 0; waitSec < 8; waitSec++) {
-            await delay(1000);
-            // FIX: Use cleanSender instead of the raw senderNumber when fetching the session map
-            session = userSessions.get(cleanSender) || session;
-            if (session.isConnected && session.sock?.ws?.isOpen) break;
-          }
+        // Round-robin selection
+        if (senderIndex >= activeSessionsPool.length) {
+          senderIndex = 0;
         }
-        if (!session.isConnected || !session.sock?.ws?.isOpen) {
-          if (onProgress) onProgress({ step: 'failed', current: i, total: numGroups, message: 'WhatsApp disconnected mid-batch. Cancelling remaining groups.' });
-          break;
+        
+        const poolItem = activeSessionsPool[senderIndex];
+        const { phone: currentPhone, session: currentSession } = poolItem;
+        
+        currentSession.lastActivity = Date.now(); // Keep awake during job
+
+        if (!currentSession.isConnected || !currentSession.sock?.ws?.isOpen) {
+           // Allow a brief wait for reconnection
+           let reconnected = false;
+           for (let waitSec = 0; waitSec < 8; waitSec++) {
+             await delay(1000);
+             const refetchedSession = userSessions.get(currentPhone) || currentSession;
+             if (refetchedSession.isConnected && refetchedSession.sock?.ws?.isOpen) {
+                poolItem.session = refetchedSession; // update reference
+                reconnected = true;
+                break;
+             }
+           }
+           if (!reconnected) {
+             console.warn(`[WhatsApp] Device ${currentPhone} disconnected during batch. Removing from pool.`);
+             activeSessionsPool.splice(senderIndex, 1);
+             if (activeSessionsPool.length > 0) {
+               i--; // retry this group index with the next available device
+             }
+             continue; 
+           }
         }
 
         const title = numGroups === 1 ? sanitizedBase : `${sanitizedBase} #${i}`;
@@ -473,31 +530,31 @@ export const whatsappManager = {
             current: i,
             total: numGroups,
             groupTitle: title,
-            message: `Creating ${isCommunity ? 'community' : 'group'} "${title}" (Adding +${cleanTargetNumber})...`
+            message: `[+${currentPhone}] Creating ${isCommunity ? 'community' : 'group'} "${title}"...`
           });
         }
 
         let createdEntity = null;
         let inviteLink = null;
         let errorMsg = null;
+        let fatalError = false;
 
-        let shouldBreakLoop = false;
         try {
           // Send a human-like presence update to tell WhatsApp the user is "active"
           try {
-            await session.sock.sendPresenceUpdate('available');
-            await delay(Math.floor(Math.random() * 1000) + 500); // Random 0.5s - 1.5s human hesitation
+            await poolItem.session.sock.sendPresenceUpdate('available');
+            await delay(Math.floor(Math.random() * 1000) + 500); 
           } catch(e) {}
 
           if (isCommunity) {
              for (let retry = 1; retry <= 3; retry++) {
                try {
-                 createdEntity = await session.sock.communityCreate(title, '');
+                 createdEntity = await poolItem.session.sock.communityCreate(title, '');
                  break;
                } catch (createErr) {
                  const errMsg = createErr.message?.toLowerCase() || '';
                  if (retry === 3 || errMsg.includes('rate-overlimit') || errMsg.includes('429') || errMsg.includes('not-authorized')) throw createErr;
-                 console.warn(`[WhatsApp] Community create retry ${retry}:`, createErr.message);
+                 console.warn(`[WhatsApp] [+${currentPhone}] Community create retry ${retry}:`, createErr.message);
                  await delay(3500 * retry);
                }
              }
@@ -505,19 +562,19 @@ export const whatsappManager = {
              if (createdEntity?.id) {
                await delay(2000);
                try {
-                 const code = await session.sock.communityInviteCode(createdEntity.id);
+                 const code = await poolItem.session.sock.communityInviteCode(createdEntity.id);
                  if (code) inviteLink = `https://chat.whatsapp.com/${code}`;
                } catch(codeErr) {}
              }
           } else {
              for (let retry = 1; retry <= 3; retry++) {
                try {
-                 createdEntity = await session.sock.groupCreate(title, [participantJid]);
+                 createdEntity = await poolItem.session.sock.groupCreate(title, [participantJid]);
                  break;
                } catch (createErr) {
                  const errMsg = createErr.message?.toLowerCase() || '';
                  if (retry === 3 || errMsg.includes('rate-overlimit') || errMsg.includes('429') || errMsg.includes('not-authorized')) throw createErr;
-                 console.warn(`[WhatsApp] Group create retry ${retry}:`, createErr.message);
+                 console.warn(`[WhatsApp] [+${currentPhone}] Group create retry ${retry}:`, createErr.message);
                  await delay(3500 * retry);
                }
              }
@@ -526,19 +583,19 @@ export const whatsappManager = {
                for (let attempt = 1; attempt <= 3; attempt++) {
                  try {
                    await delay(600 * attempt);
-                   const code = await session.sock.groupInviteCode(createdEntity.id);
+                   const code = await poolItem.session.sock.groupInviteCode(createdEntity.id);
                    if (code) { inviteLink = `https://chat.whatsapp.com/${code}`; break; }
                  } catch (codeErr) {}
                }
              }
           }
         } catch (err) {
-          console.error(`Error creating ${title}:`, err);
+          console.error(`Error creating ${title} via ${currentPhone}:`, err);
           errorMsg = err.message || 'Creation failed';
           if (errorMsg.toLowerCase().includes('rate-overlimit') || errorMsg.toLowerCase().includes('resource-limit') || errorMsg.includes('429')) {
-            errorMsg = `WhatsApp Rate Limit: ${errorMsg}. Pausing to protect account.`;
+            errorMsg = `WhatsApp Rate Limit. Pausing this device to protect account.`;
+            fatalError = true;
           }
-          shouldBreakLoop = true;
         }
 
         const record = db.saveGroupRecord({
@@ -549,7 +606,7 @@ export const whatsappManager = {
           targetNumber: cleanTargetNumber,
           status: createdEntity ? 'created' : 'failed',
           error: errorMsg,
-          senderNumber: cleanSender
+          senderNumber: currentPhone
         });
         results.push(record);
 
@@ -562,17 +619,26 @@ export const whatsappManager = {
             inviteLink,
             error: errorMsg,
             record,
-            message: createdEntity ? `Successfully created "${title}"!` : `Failed: ${errorMsg}`
+            message: createdEntity ? `[+${currentPhone}] Successfully created "${title}"!` : `[+${currentPhone}] Failed: ${errorMsg}`
           });
         }
 
-        if (shouldBreakLoop) {
-           break; // Stop processing further groups if we hit a rate limit or unrecoverable error
+        if (fatalError) {
+           console.warn(`[WhatsApp] Device ${currentPhone} hit a fatal error (e.g. rate limit). Removing from active pool.`);
+           activeSessionsPool.splice(senderIndex, 1);
+           // Decrement i to retry this group index, unless we are totally out of senders
+           if (activeSessionsPool.length > 0) {
+              i--; 
+           }
+           continue; // skip the cooldown for the dropped device
         }
 
-        if (i < numGroups) {
-          // Add a randomized "Jitter" to the cooldown. Bots use exact delays, humans are random.
-          const randomJitterMs = Math.floor(Math.random() * 4000); // Up to 4 seconds of randomness
+        // Advance to the next sender for the next round-robin loop
+        senderIndex++;
+
+        // Handle cooldown if there are still groups left to create
+        if (i < numGroups && activeSessionsPool.length > 0) {
+          const randomJitterMs = Math.floor(Math.random() * 4000); 
           const totalWaitMs = (safeDelay * 1000) + randomJitterMs;
           const displaySeconds = Math.ceil(totalWaitMs / 1000);
 
@@ -582,23 +648,28 @@ export const whatsappManager = {
               current: i,
               total: numGroups,
               cooldownSeconds: displaySeconds,
-              message: `Waiting ${displaySeconds}s cooldown to prevent detection/bans...`
+              message: `Waiting ${displaySeconds}s cooldown...`
             });
           }
           
           const loops = Math.ceil(totalWaitMs / 100);
           for (let wait = 0; wait < loops; wait++) {
-            if (session.currentJob?.status === 'cancelled') {
-              shouldBreakLoop = true;
+            if (jobData.status === 'cancelled') {
+              cancelled = true;
               break;
             }
             await delay(100);
           }
-          if (shouldBreakLoop) break;
+          if (cancelled) break;
         }
       }
     } finally {
-      session.currentJob = null;
+      // Clear the job object reference from all sessions
+      for (const { session } of activeSessionsPool) {
+         if (session.currentJob === jobData) {
+            session.currentJob = null;
+         }
+      }
     }
     return results;
   },
