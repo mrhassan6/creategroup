@@ -427,8 +427,8 @@ export const whatsappManager = {
       }
       
       if (!session.isConnected) {
-        // Wait up to 15 seconds for connection
-        for (let w = 0; w < 15; w++) {
+        // Wait up to 90 seconds for connection (if a number has many messages in background, Baileys can take a long time to process them)
+        for (let w = 0; w < 90; w++) {
           if (session.isConnected) break;
           await delay(1000);
         }
@@ -500,9 +500,9 @@ export const whatsappManager = {
         currentSession.lastActivity = Date.now(); // Keep awake during job
 
         if (!currentSession.isConnected || !currentSession.sock?.ws?.isOpen) {
-           // Allow a brief wait for reconnection
+           // Allow a brief wait for reconnection (can take longer if rate-limited or lots of messages)
            let reconnected = false;
-           for (let waitSec = 0; waitSec < 8; waitSec++) {
+           for (let waitSec = 0; waitSec < 30; waitSec++) {
              await delay(1000);
              const refetchedSession = userSessions.get(currentPhone) || currentSession;
              if (refetchedSession.isConnected && refetchedSession.sock?.ws?.isOpen) {
